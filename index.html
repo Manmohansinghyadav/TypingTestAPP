@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hindi Typing Tutor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Noto Sans Devanagari', sans-serif;
+      margin: 0; padding: 0;
+      background: #f0f0f0;
+      color: #222;
+    }
+    .container {
+      max-width: 900px;
+      margin: auto;
+      padding: 2rem;
+    }
+    h1 { text-align: center; }
+    .controls, .stats, .text-area, .input-area, .keyboard, .settings, .summary {
+      margin: 1rem 0;
+    }
+    .text-to-type {
+      padding: 1rem;
+      background: #fff;
+      border-radius: 8px;
+      font-size: 1.5rem;
+    }
+    input[type="text"] {
+      width: 100%;
+      font-size: 1.3rem;
+      padding: 0.5rem;
+    }
+    .correct { color: green; }
+    .incorrect { color: red; }
+    .button-group button {
+      margin-right: 10px;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+    }
+    .stats span {
+      display: inline-block;
+      margin-right: 1rem;
+    }
+    .dark-mode {
+      background: #121212;
+      color: #eee;
+    }
+    .dark-mode .text-to-type, .dark-mode input[type="text"] {
+      background: #222;
+      color: #fff;
+    }
+    #setupModal {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    #setupBox {
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+    }
+    #setupBox select, #setupBox button {
+      margin: 0.5rem 0;
+      width: 100%;
+      padding: 0.6rem;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div id="setupModal">
+    <div id="setupBox">
+      <h2>Welcome to Typing Tutor</h2>
+      <label for="initLang">Select Typing Language:</label>
+      <select id="initLang">
+        <option value="hindi">Hindi</option>
+        <option value="english">English</option>
+        <option value="hinglish">Hinglish</option>
+      </select>
+      <label for="initLevel">Select Level:</label>
+      <select id="initLevel">
+        <option value="beginner">Beginner</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+      </select>
+      <button onclick="startApp()">Continue</button>
+    </div>
+  </div>
+
+  <div class="container" style="display:none" id="mainApp">
+    <h1>Multilingual Typing Tutor</h1>
+    <div class="settings">
+      <label for="language">Language:</label>
+      <select id="language" onchange="changeLanguage()">
+        <option value="hindi">Hindi</option>
+        <option value="english">English</option>
+        <option value="hinglish">Hinglish</option>
+      </select>
+
+      <label for="level">Level:</label>
+      <select id="level">
+        <option value="beginner">Beginner</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+      </select>
+
+      <label for="time">Time:</label>
+      <select id="time">
+        <option value="60">1 Min</option>
+        <option value="120">2 Min</option>
+        <option value="300">5 Min</option>
+        <option value="600">10 Min</option>
+      </select>
+
+      <button onclick="startTest()">Start</button>
+      <button onclick="toggleDarkMode()">Dark/Light Mode</button>
+    </div>
+
+    <div class="text-area">
+      <div id="textToType" class="text-to-type">कृपया प्रारंभ करने के लिए Start दबाएं।</div>
+    </div>
+
+    <div class="input-area">
+      <input type="text" id="userInput" oninput="checkInput()" disabled>
+    </div>
+
+    <div class="stats">
+      <span>Correct: <strong id="correct">0</strong></span>
+      <span>Incorrect: <strong id="incorrect">0</strong></span>
+      <span>Accuracy: <strong id="accuracy">0%</strong></span>
+      <span>WPM: <strong id="wpm">0</strong></span>
+      <span>Time: <strong id="timer">00:00</strong></span>
+    </div>
+
+    <div class="summary" id="summary"></div>
+  </div>
+
+  <script>
+    const texts = {
+      hindi: {
+        beginner: ["राम", "सीता", "गाय", "पानी", "खेल"],
+        intermediate: ["राम स्कूल गया।", "सीता ने खाना खाया।"],
+        advanced: ["भारत एक लोकतांत्रिक देश है जहाँ विभिन्न धर्मों के लोग रहते हैं।"]
+      },
+      english: {
+        beginner: ["Ram", "Sita", "Cow", "Water", "Play"],
+        intermediate: ["Ram went to school.", "Sita ate food."],
+        advanced: ["India is a democratic country with many religions living together."]
+      },
+      hinglish: {
+        beginner: ["Ram", "Sita", "Gai", "Paani", "Khel"],
+        intermediate: ["Ram school gaya.", "Sita ne khana khaya."],
+        advanced: ["Bharat ek loktantrik desh hai jahan alag alag dharmon ke log rahte hain."]
+      }
+    };
+
+    let currentText = "";
+    let correctCount = 0;
+    let incorrectCount = 0;
+    let totalTyped = 0;
+    let timer = null;
+    let secondsLeft = 0;
+    let startTime = null;
+
+    function startApp() {
+      const lang = document.getElementById('initLang').value;
+      const level = document.getElementById('initLevel').value;
+      document.getElementById('language').value = lang;
+      document.getElementById('level').value = level;
+      document.getElementById('setupModal').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      changeLanguage();
+    }
+
+    function changeLanguage() {
+      document.getElementById("textToType").innerText = "Language selected. Click Start to begin.";
+      document.getElementById("userInput").value = "";
+    }
+
+    function startTest() {
+      document.getElementById('userInput').disabled = false;
+      document.getElementById('userInput').focus();
+      correctCount = 0;
+      incorrectCount = 0;
+      totalTyped = 0;
+      secondsLeft = parseInt(document.getElementById('time').value);
+      startTime = new Date();
+      nextText();
+      updateStats();
+      timer = setInterval(updateTimer, 1000);
+    }
+
+    function updateTimer() {
+      if (secondsLeft <= 0) {
+        clearInterval(timer);
+        document.getElementById('userInput').disabled = true;
+        document.getElementById('summary').innerText = `Test Over!\nCorrect: ${correctCount}, Incorrect: ${incorrectCount}, Accuracy: ${getAccuracy()}%, WPM: ${getWPM()}`;
+        return;
+      }
+      secondsLeft--;
+      document.getElementById('timer').innerText = `${Math.floor(secondsLeft/60)}:${('0'+(secondsLeft%60)).slice(-2)}`;
+    }
+
+    function getCurrentArray() {
+      const level = document.getElementById('level').value;
+      const lang = document.getElementById('language').value;
+      return texts[lang][level];
+    }
+
+    function nextText() {
+      const arr = getCurrentArray();
+      currentText = arr[Math.floor(Math.random() * arr.length)];
+      document.getElementById('textToType').innerText = currentText;
+      document.getElementById('userInput').value = "";
+    }
+
+    function checkInput() {
+      const input = document.getElementById('userInput').value;
+      if (currentText.startsWith(input)) {
+        document.getElementById('userInput').style.color = 'green';
+      } else {
+        document.getElementById('userInput').style.color = 'red';
+      }
+
+      if (input === currentText) {
+        correctCount++;
+        totalTyped++;
+        nextText();
+      } else if (input.length >= currentText.length) {
+        incorrectCount++;
+        totalTyped++;
+        nextText();
+      }
+      updateStats();
+    }
+
+    function updateStats() {
+      document.getElementById('correct').innerText = correctCount;
+      document.getElementById('incorrect').innerText = incorrectCount;
+      document.getElementById('accuracy').innerText = getAccuracy() + "%";
+      document.getElementById('wpm').innerText = getWPM();
+    }
+
+    function getAccuracy() {
+      if (totalTyped === 0) return 0;
+      return Math.round((correctCount / totalTyped) * 100);
+    }
+
+    function getWPM() {
+      const now = new Date();
+      const minutes = (now - startTime) / 60000;
+      return Math.round(correctCount / minutes);
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+    }
+  </script>
+</body>
+</html>
